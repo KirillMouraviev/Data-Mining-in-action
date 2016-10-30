@@ -1,0 +1,178 @@
+import numpy as np
+from scipy import sparse
+
+
+class LogisticRegression:
+    def __init__(self):
+        self.w = None
+        self.loss_history = None
+
+    def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100,
+              batch_size=200, verbose=False):
+        """
+        Train this classifier using stochastic gradient descent.
+
+        Inputs:
+        - X: N x D array of training data. Each training point is a D-dimensional
+             column.
+        - y: 1-dimensional array of length N with labels 0-1, for 2 classes.
+        - learning_rate: (float) learning rate for optimization.
+        - reg: (float) regularization strength.
+        - num_iters: (integer) number of steps to take when optimizing
+        - batch_size: (integer) number of training examples to use at each step.
+        - verbose: (boolean) If true, print progress during optimization.
+
+        Outputs:
+        A list containing the value of the loss function at each training iteration.
+        """
+        # Add a column of ones to X for the bias sake.
+        X = LogisticRegression.append_biases(X)
+        num_train, dim = X.shape
+        if self.w is None:
+            # lazily initialize weights
+            self.w = np.random.randn(dim) * 0.01
+
+        # Run stochastic gradient descent to optimize W
+        self.loss_history = []
+        for it in xrange(num_iters):
+            #########################################################################
+            # TODO:                                                                 #
+            # Sample batch_size elements from the training data and their           #
+            # corresponding labels to use in this round of gradient descent.        #
+            # Store the data in X_batch and their corresponding labels in           #
+            # y_batch; after sampling X_batch should have shape (batch_size, dim)   #
+            # and y_batch should have shape (batch_size,)                           #
+            #                                                                       #
+            # Hint: Use np.random.choice to generate indices. Sampling with         #
+            # replacement is faster than sampling without replacement.              #
+            #########################################################################
+            indices = np.random.choice(X.shape[0], (batch_size), replace = True)
+            X_batch = X.toarray()[indices]
+            #print batch_size
+            #print indices.shape
+            #print 'X_batch 1: ', X_batch.shape
+            y_batch = y[indices]
+            #########################################################################
+            #                       END OF YOUR CODE                                #
+            #########################################################################
+
+            # evaluate loss and gradient
+            loss, gradW = self.loss(X_batch, y_batch, reg)
+            self.loss_history.append(loss)
+            # perform parameter update
+            #########################################################################
+            # TODO:                                                                 #
+            # Update the weights using the gradient and the learning rate.          #
+            #########################################################################
+            self.w = self.w + gradW * learning_rate
+            #########################################################################
+            #                       END OF YOUR CODE                                #
+            #########################################################################
+
+            if verbose and it % 100 == 0:
+                print 'iteration %d / %d: loss %f' % (it, num_iters, loss)
+
+        return self
+
+    def predict_proba(self, X, append_bias=False):
+        """
+        Use the trained weights of this linear classifier to predict probabilities for
+        data points.
+
+        Inputs:
+        - X: N x D array of data. Each row is a D-dimensional point.
+        - append_bias: bool. Whether to append bias before predicting or not.
+
+        Returns:
+        - y_proba: Probabilities of classes for the data in X. y_pred is a 2-dimensional
+          array with a shape (N, 2), and each row is a distribution of classes [prob_class_0, prob_class_1].
+        """
+        if append_bias:
+            X = LogisticRegression.append_biases(X)
+        ###########################################################################
+        # TODO:                                                                   #
+        # Implement this method. Store the probabilities of classes in y_proba.   #
+        # Hint: It might be helpful to use np.vstack and np.sum                   #
+        ###########################################################################
+        print X.shape
+        W = self.w * np.ones(X.shape)
+        print W.shape, X.shape
+        W_X = W * X.toarray()
+        sums = np.sum(W_X, axis = 1)
+        prob_of_1 = 1.0 / (1.0 + np.exp(sums))
+        prob_of_0 = 1.0 - prob_of_1
+        y_proba = np.hstack([prob_of_0[:, np.newaxis], prob_of_1[:, np.newaxis]])
+        print y_proba.shape
+        ###########################################################################
+        #                           END OF YOUR CODE                              #
+        ###########################################################################
+        return y_proba
+
+    def predict(self, X):
+        """
+        Use the ```predict_proba``` method to predict labels for data points.
+
+        Inputs:
+        - X: N x D array of training data. Each column is a D-dimensional point.
+
+        Returns:
+        - y_pred: Predicted labels for the data in X. y_pred is a 1-dimensional
+          array of length N, and each element is an integer giving the predicted
+          class.
+        """
+
+        ###########################################################################
+        # TODO:                                                                   #
+        # Implement this method. Store the predicted labels in y_pred.            #
+        ###########################################################################
+        y_proba = self.predict_proba(X, append_bias=True)
+        y_pred = y_proba.argmax(axis = 1)
+        ###########################################################################
+        #                           END OF YOUR CODE                              #
+        ###########################################################################
+        return y_pred
+
+    def loss(self, X_batch, y_batch, reg):
+        #print 'x_batch: ', X_batch.shape
+        """Logistic Regression loss function
+        Inputs:
+        - X: N x D array of data. Data are D-dimensional rows
+        - y: 1-dimensional array of length N with labels 0-1, for 2 classes
+        Returns:
+        a tuple of:
+        - loss as single float
+        - gradient with respect to weights w; an array of same shape as w
+        """
+        dw = np.zeros_like(self.w)  # initialize the gradient as zero
+        W_X = self.w[np.newaxis, :] * np.ones(X_batch.shape) * X_batch
+        w_X = np.sum(W_X, axis = 1)
+        yp = 1.0 / (1.0 + np.exp(-w_X))
+        loss_array = y_batch * np.log(yp) + (1.0 - y_batch) * np.log(1.0 - yp)
+        #loss_array -= reg * np.sum(self.w ** 2)
+        loss = np.mean(loss_array)
+        #print loss_array.shape
+        #print 'x.shape: ', X_batch.shape
+        #print 'wx: ', w_X.shape
+        #print type(w_X)
+        #print 'f: ', f.shape
+        grad_array = (y_batch - yp)[:, np.newaxis] * X_batch
+        #grad_array -= 2 * reg * self.w
+        #grad_array[-1] += 2 * reg * self.w[-1]
+        grad = np.sum(grad_array, axis = 0) / X_batch.shape[0]
+        print loss
+        #print 'grad: ', grad.shape
+        # Compute loss and gradient. Your code should not contain python loops.
+
+
+        # Right now the loss is a sum over all training examples, but we want it
+        # to be an average instead so we divide by num_train.
+        # Note that the same thing must be done with gradient.
+
+
+        # Add regularization to the loss and gradient.
+        # Note that you have to exclude bias term in regularization.
+        return loss, grad
+
+    @staticmethod
+    def append_biases(X):
+        return sparse.hstack((X, np.ones(X.shape[0])[:, np.newaxis]))
